@@ -19,7 +19,7 @@ public class ProductSearchTool
     {
         var options = new SearchOptions
         {
-            Size = 5,
+            Size = 10,
             Select = { "name", "description", "price", "category", "brand", "specifications" }
         };
 
