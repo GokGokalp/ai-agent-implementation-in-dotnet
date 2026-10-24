@@ -1,0 +1,62 @@
+name: spec-guardrail
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+    paths:
+      - "Program.cs"
+      - "Executors/**"
+      - "Tools/**"
+      - "Prompts/**"
+      - "Models/**"
+      - "Data/**"
+
+concurrency:
+  group: spec-guardrail-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  id-token: write       # OIDC token for azure/login
+  contents: read
+  pull-requests: write  # the PR comment
+  statuses: write       # the spec-guardrail commit status
+
+jobs:
+  check:
+    # Fork PRs get no OIDC token, so they are skipped.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      # Signs in as the managed identity from Infrastructure/. It has no role on any Azure resource.
+      - uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Get a token for the AI gateway
+        env:
+          APIM_AUDIENCE: ${{ vars.APIM_AUDIENCE }}
+        run: |
+          TOKEN=$(az account get-access-token --resource "$APIM_AUDIENCE" --query accessToken -o tsv)
+          echo "::add-mask::$TOKEN"
+          echo "APIM_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+
+      - name: Run the domain guardrail check
+        run: python3 .github/spec-guardrail/check.py
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+          APIM_ENDPOINT: ${{ vars.APIM_ENDPOINT }}
+          MODEL: ${{ vars.SPEC_GUARDRAIL_MODEL || 'gpt-6-luna' }}
+          REASONING_EFFORT: ${{ vars.SPEC_GUARDRAIL_REASONING_EFFORT }}
+          SRC_PATHS: "Program.cs Executors Tools Prompts Models Data"
