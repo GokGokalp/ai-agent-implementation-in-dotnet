@@ -38,10 +38,10 @@ public class ProductSearchTool
         if (products.Count == 0)
             return "No products found matching the search query.";
 
-        var names = products
+        var productNames = products
             .Select(p => p.Split('|')[0].Replace("Product: ", "").Trim())
             .ToList();
-        Console.WriteLine($"ProductSearchTool: {products.Count} products found: {string.Join(", ", names)}");
+        Console.WriteLine($"ProductSearchTool: {products.Count} products found: {string.Join(", ", productNames)}");
 
         return string.Join("\n", products);
     }
